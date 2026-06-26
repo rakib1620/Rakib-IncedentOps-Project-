@@ -1,0 +1,41 @@
+name: Deploy IncidentOps to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1c # আপনার EC2 রিজিয়ন (যেমন মুম্বাই হলে ap-south-1)
+
+      - name: Execute Remote SSH commands to Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.AWS_EC2_INSTANCE_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }} # গিটহাব সিক্রেটসে আপনার .pem ফাইলের টেক্সটটি দিতে ভুলবেন না
+          script: |
+            # ১. সার্ভারের সঠিক পাথে ঢোকা
+            cd ~/myproject/Rakib-IncedentOps-Project-/rakib-incedent
+            
+            # ২. গিটহাব থেকে লেটেস্ট কোড পুল করা
+            git pull origin main
+            
+            # ৩. ব্যাকএন্ড ফোল্ডারে ঢোকা এবং ডিপেন্ডেন্সি ইনস্টল করা
+            cd backend
+            npm install
+            
+            # ৪. PM2 দিয়ে ব্যাকএন্ড রিস্টার্ট বা স্টার্ট করা
+            # (আপনার ব্যাকএন্ডের মেইন ফাইল src ফোল্ডারে থাকলে src/index.js বা src/server.js দিন)
+            pm2 restart incidentops || pm2 start src/index.js --name "incidentops"
