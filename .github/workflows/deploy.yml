@@ -1,0 +1,50 @@
+name: Deploy IncidentOps to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Execute Remote SSH commands to Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.AWS_EC2_INSTANCE_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # ১. নোড এবং এনপিএম এর পাথ সোর্স লোড করা
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            
+            # ২. সরাসরি প্রজেক্টের রুট ডিরেক্টরিতে ঢোকা
+            cd /home/ubuntu/rakib-incedent
+            
+            # ৩. গিটহাব থেকে কোড পুল করা
+            git pull origin main || echo "Proceeding without git pull if local changes conflict"
+            
+            # ৪. ব্যাকএন্ড ডিরেক্টরিতে ঢুকে ডিপেন্ডেন্সি ইন্সটল করা
+            cd backend
+            npm install
+            
+            # ৫. পুরোনো পিএম২ প্রসেস থাকলে তা ক্লিন করা
+            pm2 delete incidentops || true
+            
+            # ৬. পিএম২ দিয়ে সুনির্দিষ্টভাবে src/server.js রান করা (image_e5fce4.png অনুযায়ী)
+            pm2 start src/server.js --name "incidentops"
+            
+            # ৭. পিএম২ স্টেট সেভ করা যেন সার্ভার রিবুট হলেও ব্যাকএন্ড অটো চালু হয়
+            pm2 save
